@@ -68,7 +68,7 @@ class Predictor(BasePredictor):
         ),
         prompt: str = Input(
             description="Prompt",
-            default="photo of a beautiful girl wearing casual shirt in a garden"
+            default=""
         ),
         num_outputs: int = Input(
             description="Number of images to output.",
