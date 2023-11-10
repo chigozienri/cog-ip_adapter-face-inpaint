@@ -7,13 +7,13 @@ import torch
 import shutil
 from PIL import Image
 from typing import List
-from diffusers import StableDiffusionPipeline, DDIMScheduler, AutoencoderKL
-from ip_adapter import IPAdapterPlus
+from diffusers import StableDiffusionInpaintPipelineLegacy, DDIMScheduler, AutoencoderKL
+from ip_adapter import IPAdapter
 
 base_model_path = "runwayml/stable-diffusion-v1-5"
 vae_model_path = "stabilityai/sd-vae-ft-mse"
 image_encoder_path = "/IP-Adapter/models/image_encoder/"
-ip_ckpt = "/IP-Adapter/models/ip-adapter-plus-face_sd15.bin"
+ip_ckpt = "/IP-Adapter/models/ip-adapter_sd15.bin"
 device = "cuda"
 MODEL_CACHE = "model-cache"
 VAE_CACHE = "vae-cache"
@@ -39,7 +39,7 @@ class Predictor(BasePredictor):
             cache_dir=VAE_CACHE
         ).to(dtype=torch.float16)
         # load SD pipeline
-        self.pipe = StableDiffusionPipeline.from_pretrained(
+        self.pipe = StableDiffusionInpaintPipelineLegacy.from_pretrained(
             base_model_path,
             torch_dtype=torch.float16,
             scheduler=noise_scheduler,
@@ -53,7 +53,18 @@ class Predictor(BasePredictor):
         self,
         image: Path = Input(
              description="Input face image",
+        ),
+        masked_image: Path = Input(
+             description="Input masked image",
              default=None
+        ),
+        mask: Path = Input(
+             description="Input mask",
+             default=None
+        ),
+        strength: float = Input(
+             description="mask strength",
+             default=0.7
         ),
         prompt: str = Input(
             description="Prompt",
@@ -80,10 +91,19 @@ class Predictor(BasePredictor):
         image = Image.open(image)
         image.resize((256, 256))
 
-        ip_model = IPAdapterPlus(self.pipe, image_encoder_path, ip_ckpt, device, num_tokens=16)
+        masked_image = Image.open(masked_image)
+        masked_image.resize((512, 512*masked_image.height//masked_image.width))
+
+        mask = Image.open(mask)
+        mask.resize(masked_image.size)
+
+        ip_model = IPAdapter(self.pipe, image_encoder_path, ip_ckpt, device)
 
         images = ip_model.generate(
             pil_image=image,
+            image=masked_image,
+            mask_image=mask,
+            strength=strength,
             num_samples=num_outputs,
             num_inference_steps=num_inference_steps,
             seed=seed,
